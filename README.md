@@ -13,10 +13,10 @@ map of roads with different lengths.
 
 ## Setup
 
-Open a terminal in the project folder:
+Open a terminal in the folder containing `shortest_path_town.py`:
 
 ```bash
-cd /path/to/pythonDJ
+cd /path/to/shortestPath
 ```
 
 Create and activate a virtual environment (recommended):
@@ -56,12 +56,32 @@ On Windows, use `.venv\Scripts\python.exe shortest_path_town.py` instead.
 
 ## How to use
 
-1. Select an algorithm from the list on the left.
-2. Click an intersection to choose the start (green).
-3. Click a different intersection to choose the destination (red).
-4. Watch the search and follow the final route (green roads). The result shows
-   the route length, number of intersections, and elapsed search time.
-5. Click an intersection after the search finishes to start another search.
+The window is arranged as a compact header, a left sidebar, and a large map:
+
+- **Header:** Shows the application name, selected algorithm, and current
+  instruction or search result.
+- **Choose Algorithm card:** Select Dijkstra, A*, Bidirectional Dijkstra,
+  Bidirectional A*, Greedy Best-First, or BFS.
+- **How to use card:** Shows the endpoint-selection instructions and keyboard
+  shortcuts.
+- **Map:** Displays intersections, weighted roads, search progress, and a
+  legend for the final route, visited and unvisited intersections, and road
+  weights.
+
+To find a route:
+
+1. Select an algorithm in the **Choose Algorithm** card.
+2. Click an intersection on the map to set the start (green marker).
+3. Click a different intersection to set the destination (red marker).
+4. Watch the algorithm explore. The live header status reports progress; when
+   the search ends, it shows the route length, number of intersections, and
+   elapsed search time.
+5. Click an intersection after the search finishes to reset the map and begin
+   another route.
+
+The result is shortest by total road length for Dijkstra, A*, and both
+bidirectional variants. BFS finds a route with the fewest roads, while Greedy
+Best-First finds a route without guaranteeing that it is shortest by length.
 
 Keyboard controls:
 
@@ -70,24 +90,27 @@ Keyboard controls:
 | `Space` | Pause or resume the animation |
 | `+` or `=` | Speed up the animation |
 | `-` or `_` | Slow down the animation |
-| `r` | Clear the current selection |
+| `r` | Clear the current selection and reset the search |
 | `n` | Generate a new town |
-| `q` | Quit |
+| `q` | Close the application window |
 
-### Map colours
+### Map colours and status
 
 | Colour | Meaning |
 | --- | --- |
-| White | Unvisited intersection |
-| Orange | Intersection in the search frontier |
-| Blue | Visited intersection |
-| Red road | Road currently being checked |
-| Blue roads | Current best-known predecessor tree |
+| Pale blue node | Unvisited intersection |
+| Bright blue node | Visited intersection |
+| Teal node | Discovered intersection in the search frontier |
+| Slate-blue road | Road in the town map; its label shows its weight |
+| Blue road | Current best-known predecessor tree |
+| Cyan road | Road currently being checked |
 | Green road | Final route |
-| Green marker | Start |
-| Red marker | Destination |
+| Green marker and label | Start |
+| Red marker and label | Destination |
 
-Road labels show their lengths in kilometres.
+Road labels show lengths in kilometres. The header status changes as the
+selection and search progress, then displays the result. The map legend is a
+quick key to the final path, visited and unvisited nodes, and road weights.
 
 ## Algorithms
 
