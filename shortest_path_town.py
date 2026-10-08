@@ -29,13 +29,11 @@ Keyboard controls:
     q           Close the application window.
 
 Map colours:
-    White node  Not yet visited.
-    Orange node In the search frontier (discovered but not yet visited).
-    Blue node   Visited.
-    Red road    Road currently being examined.
-    Blue roads  Current predecessor links (best-known search tree).
-    Green roads Final route selected by the algorithm.
-    Green node  Start; red node is the destination.
+    Pale blue node Not yet visited.
+    Bright blue node Visited.
+    Dark slate road Unexplored road.
+    Blue road Current predecessor tree.
+    Green road Final route; green marker is start, red marker is destination.
 """
 import heapq
 import math
@@ -46,7 +44,32 @@ from collections import deque
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
+from matplotlib.patches import FancyBboxPatch, Rectangle
 from matplotlib.widgets import RadioButtons
+
+
+# Navy and blue colors based on the application's dark route-lab interface.
+THEME = {
+    "background": "#071426",
+    "header": "#0D1D34",
+    "panel": "#0D1B30",
+    "map": "#08172A",
+    "border": "#193557",
+    "text": "#E6F0FF",
+    "muted": "#9BB5D8",
+    "road": "#718CB6",
+    "road_label": "#18345A",
+    "node": "#DCEBFF",
+    "node_edge": "#65A5FF",
+    "frontier": "#10D6A2",
+    "visited": "#168BFF",
+    "tree": "#138BFF",
+    "current": "#16C7F4",
+    "path": "#00D6A0",
+    "start": "#00D6A0",
+    "end": "#F0445E",
+    "accent": "#2788FF",
+}
 
 
 # --------------------------------------------------------------------------
@@ -602,13 +625,88 @@ class ShortestPathApp:
         registration methods arrange for instance methods to be called on
         relevant UI events.
         """
-        # Create the main figure and map axes, then reserve space on the left
-        # for the algorithm selector.
-        self.fig, self.ax = plt.subplots(figsize=(12, 7.5))
-        self.fig.subplots_adjust(left=0.27)
+        # Create the main figure and map axes, reserving a header, sidebar,
+        # and wide central area for the road network.
         self.algorithm = "Dijkstra"
-        algorithm_ax = self.fig.add_axes([0.025, 0.28, 0.21, 0.47])
-        algorithm_ax.set_title("Algorithm", fontsize=11)
+        self.fig, self.ax = plt.subplots(figsize=(13, 7.75))
+        self.fig.patch.set_facecolor(THEME["background"])
+        self.fig.subplots_adjust(left=0.24, right=0.98, top=0.84, bottom=0.06)
+        self.ax.set_position([0.24, 0.06, 0.74, 0.78])
+
+        # Build a compact header with a location glyph, app name, subtitle,
+        # and a live algorithm/status readout aligned on the right.
+        header_ax = self.fig.add_axes([0.0, 0.84, 1.0, 0.16], zorder=0)
+        header_ax.set_facecolor(THEME["header"])
+        header_ax.set_xticks([])
+        header_ax.set_yticks([])
+        header_ax.scatter(
+            [0.04], [0.52], s=520, marker="s", color=THEME["accent"], zorder=1,
+        )
+        header_ax.scatter(
+            [0.04], [0.54], s=115, marker="o", color=THEME["text"], zorder=2,
+        )
+        header_ax.scatter(
+            [0.04], [0.54], s=32, marker="o", color=THEME["accent"], zorder=3,
+        )
+        header_ax.set_xlim(0, 1)
+        header_ax.set_ylim(0, 1)
+        for spine in header_ax.spines.values():
+            spine.set_visible(False)
+        manager = plt.get_current_fig_manager()
+        if hasattr(manager, "set_window_title"):
+            manager.set_window_title("Shortest Path / Town")
+        self.fig.text(
+            0.075, 0.925, "Shortest Path / Town", fontsize=18,
+            fontweight="bold", color=THEME["text"], va="center",
+        )
+        self.fig.text(
+            0.076, 0.885, "Interactive Route-Finding Lab", fontsize=9,
+            color=THEME["muted"], va="center",
+        )
+        self.header_algorithm = self.fig.text(
+            0.72, 0.925, self.algorithm,
+            fontsize=9, fontweight="bold", color=THEME["accent"],
+            ha="left", va="center",
+        )
+        self.header_status = self.fig.text(
+            0.72, 0.885, "Choose a start intersection",
+            fontsize=8, color=THEME["muted"], ha="left", va="center",
+        )
+        self.fig.add_artist(plt.Line2D(
+            [0.0, 1.0], [0.84, 0.84], transform=self.fig.transFigure,
+            color=THEME["border"], linewidth=1.0,
+        ))
+
+        # Frame the map as its own panel, then use a dark interior for the
+        # network so its roads and active route have clear contrast.
+        self.ax.set_facecolor(THEME["map"])
+        self.ax.patch.set_edgecolor(THEME["border"])
+        self.ax.patch.set_linewidth(1.2)
+
+        # The left column contains independent algorithm and help cards.
+        algorithm_ax = self.fig.add_axes([0.02, 0.46, 0.21, 0.35])
+        algorithm_ax.set_facecolor(THEME["panel"])
+        algorithm_ax.patch.set_edgecolor(THEME["border"])
+        algorithm_ax.patch.set_linewidth(1.0)
+        self.selection_highlight = Rectangle(
+            (0.02, 0.80), 0.96, 0.115,
+            transform=algorithm_ax.transAxes,
+            facecolor="#173B78",
+            edgecolor="none",
+            zorder=1.5,
+        )
+        algorithm_ax.add_patch(self.selection_highlight)
+        algorithm_ax.text(
+            0.25,
+            0.95,
+            "Choose Algorithm",
+            transform=algorithm_ax.transAxes,
+            fontsize=9,
+            fontweight="bold",
+            color=THEME["text"],
+            ha="left",
+            va="center",
+        )
         self.algorithm_radio = RadioButtons(
             algorithm_ax,
             (
@@ -620,7 +718,26 @@ class ShortestPathApp:
                 "BFS",
             ),
             active=0,
+            activecolor=THEME["accent"],
         )
+        # RadioButtons creates one Text label for each option; recolor each
+        # label so it remains readable against the dark widget panel. Move
+        # the full list down slightly to leave a clearer gap below its heading.
+        radio_rows = np.linspace(0.78, 0.12, len(self.algorithm_radio.labels))
+        for index, (label, row_y) in enumerate(
+            zip(self.algorithm_radio.labels, radio_rows)
+        ):
+            label.set_position((0.25, row_y))
+            label.set_color(
+                THEME["accent"] if index == 0 else THEME["text"]
+            )
+            label.set_fontsize(9)
+            if index == 0:
+                label.set_fontweight("bold")
+        radio_offsets = self.algorithm_radio.ax.collections[0].get_offsets()
+        radio_offsets[:, 1] = radio_rows
+        self.algorithm_radio.ax.collections[0].set_offsets(radio_offsets)
+        self.selection_highlight.set_y(radio_rows[0] - 0.06)
         # on_clicked() registers the callback that updates the chosen mode.
         self.algorithm_radio.on_clicked(self.on_algorithm_change)
         # The timer advances one generator event per configured interval.
@@ -632,6 +749,34 @@ class ShortestPathApp:
         # needed here because handlers remain active for the app lifetime).
         self.fig.canvas.mpl_connect("button_press_event", self.on_click)
         self.fig.canvas.mpl_connect("key_press_event", self.on_key)
+        help_ax = self.fig.add_axes([0.02, 0.06, 0.21, 0.35])
+        help_ax.set_facecolor(THEME["panel"])
+        help_ax.patch.set_edgecolor(THEME["border"])
+        help_ax.patch.set_linewidth(1.0)
+        help_ax.set_xticks([])
+        help_ax.set_yticks([])
+        for spine in help_ax.spines.values():
+            spine.set_visible(False)
+        help_ax.text(
+            0.08, 0.9, "How to use", transform=help_ax.transAxes,
+            fontsize=10, fontweight="bold", color=THEME["text"], va="center",
+        )
+        help_ax.text(
+            0.08, 0.73, "Click two intersections\nto find a route.",
+            transform=help_ax.transAxes, fontsize=9, color=THEME["text"],
+            linespacing=1.45, va="top",
+        )
+        help_ax.text(
+            0.08, 0.49,
+            "SPACE   Pause / resume\n"
+            "+ / -      Adjust speed\n"
+            "R            Reset search\n"
+            "N            New town\n"
+            "Q            Quit",
+            transform=help_ax.transAxes, fontsize=8.5,
+            color=THEME["muted"], linespacing=1.65, family="monospace",
+            va="top",
+        )
         self.new_town()
 
     # ---- setup / drawing --------------------------------------------------
@@ -651,6 +796,7 @@ class ShortestPathApp:
         # stop() prevents a previously scheduled timer callback from
         # progressing an old or cleared search.
         self.timer.stop()
+        self.header_algorithm.set_text(self.algorithm)
         # These states form the interaction flow: choose start, choose end,
         # run search, then allow another search.
         self.state = "pick_start"
@@ -664,6 +810,9 @@ class ShortestPathApp:
         # axis-free drawing area.
         ax = self.ax
         ax.clear()
+        ax.set_facecolor(THEME["map"])
+        ax.patch.set_edgecolor(THEME["border"])
+        ax.patch.set_linewidth(1.2)
         ax.set_aspect("equal")
         ax.axis("off")
         # values() returns all coordinate tuples; comprehensions select x and
@@ -672,14 +821,24 @@ class ShortestPathApp:
         ys = [p[1] for p in self.pos.values()]
         ax.set_xlim(min(xs) - 0.7, max(xs) + 0.7)
         ax.set_ylim(min(ys) - 0.7, max(ys) + 0.7)
+        ax.add_patch(FancyBboxPatch(
+            (0.002, 0.002), 0.996, 0.996,
+            boxstyle="round,pad=0.004,rounding_size=0.02",
+            transform=ax.transAxes,
+            facecolor="none",
+            edgecolor=THEME["border"],
+            linewidth=1.0,
+            zorder=13,
+            clip_on=False,
+        ))
 
         # All roads
         # The adjacency is symmetric, so a < b draws each undirected road only
         # once and avoids duplicate overlapping line segments.
         roads = [[self.pos[a], self.pos[b]]
                  for a in self.adj for b in self.adj[a] if a < b]
-        ax.add_collection(LineCollection(roads, colors="#cfcfcf",
-                                         linewidths=3, zorder=1))
+        ax.add_collection(LineCollection(roads, colors=THEME["road"],
+                                         linewidths=2.5, zorder=1))
         # Road length labels (small)
         # Label each undirected road with its weight. The midpoint is the
         # arithmetic mean of its endpoint coordinates.
@@ -688,36 +847,72 @@ class ShortestPathApp:
                 if a < b:
                     mx = (self.pos[a][0] + self.pos[b][0]) / 2
                     my = (self.pos[a][1] + self.pos[b][1]) / 2
-                    ax.text(mx, my, f"{w:.1f}", fontsize=6, color="#999",
+                    ax.text(mx, my, f"{w:.1f}", fontsize=6, color=THEME["text"],
                             ha="center", va="center", zorder=2,
-                            bbox=dict(boxstyle="round,pad=0.1", fc="white",
-                                      ec="none", alpha=0.7))
+                            bbox=dict(boxstyle="round,pad=0.15",
+                                      fc=THEME["road_label"],
+                                      ec=THEME["border"], lw=0.35, alpha=0.95))
 
         # Animated layers
         # Separate line collections let the search tree, active road, and
         # final path be recolored or cleared independently during animation.
-        self.tree_lc = LineCollection([], colors="#4a90d9", linewidths=3.5, zorder=3)
-        self.cur_lc = LineCollection([], colors="#e74c3c", linewidths=5, zorder=4)
-        self.path_lc = LineCollection([], colors="#2ecc71", linewidths=7, zorder=5)
+        self.tree_lc = LineCollection([], colors=THEME["tree"], linewidths=3.5, zorder=3)
+        self.cur_lc = LineCollection([], colors=THEME["current"], linewidths=5, zorder=4)
+        self.path_lc = LineCollection([], colors=THEME["path"], linewidths=7, zorder=5)
         for lc in (self.tree_lc, self.cur_lc, self.path_lc):
             ax.add_collection(lc)
 
         # sorted() provides a stable node order, and np.array() converts the
         # coordinate list to columns usable by Matplotlib's scatter().
         all_xy = np.array([self.pos[n] for n in sorted(self.pos)])
-        ax.scatter(all_xy[:, 0], all_xy[:, 1], s=60, c="white",
-                   edgecolors="#888", linewidths=1.5, zorder=6)
-        self.frontier_sc = ax.scatter([], [], s=110, c="#f5a623",
-                                      edgecolors="#444", zorder=7)
-        self.visited_sc = ax.scatter([], [], s=110, c="#4a90d9",
-                                     edgecolors="#223", zorder=7)
-        self.start_sc = ax.scatter([], [], s=380, c="#2ecc71", marker="o",
-                                   edgecolors="black", linewidths=2, zorder=9)
-        self.end_sc = ax.scatter([], [], s=380, c="#e74c3c", marker="s",
-                                 edgecolors="black", linewidths=2, zorder=9)
+        ax.scatter(all_xy[:, 0], all_xy[:, 1], s=42, c=THEME["node"],
+                   edgecolors=THEME["node_edge"], linewidths=1.6, zorder=6)
+        self.frontier_sc = ax.scatter([], [], s=110, c=THEME["frontier"],
+                                      edgecolors=THEME["background"], linewidths=1.5,
+                                      zorder=7)
+        self.visited_sc = ax.scatter([], [], s=110, c=THEME["visited"],
+                                     edgecolors=THEME["background"], linewidths=1.5,
+                                     zorder=7)
+        self.start_sc = ax.scatter([], [], s=380, c=THEME["start"], marker="o",
+                                   edgecolors=THEME["background"], linewidths=2, zorder=9)
+        self.end_sc = ax.scatter([], [], s=380, c=THEME["end"], marker="s",
+                                 edgecolors=THEME["background"], linewidths=2, zorder=9)
 
+        # Add a compact, color-keyed legend along the lower-right map edge.
+        ax.add_patch(FancyBboxPatch(
+            (0.60, 0.012), 0.385, 0.058,
+            boxstyle="round,pad=0.012,rounding_size=0.02",
+            transform=ax.transAxes,
+            facecolor=THEME["panel"],
+            edgecolor=THEME["border"],
+            linewidth=0.8,
+            zorder=11,
+        ))
+        legend_items = (
+            (0.625, THEME["path"], "Shortest path", 0.642),
+            (0.765, THEME["visited"], "Visited", 0.782),
+            (0.847, THEME["node"], "Unvisited", 0.864),
+        )
+        for x, color, label, text_x in legend_items:
+            ax.scatter(
+                [x], [0.041], transform=ax.transAxes, s=24,
+                facecolor=color, edgecolor=THEME["accent"], linewidth=1,
+                zorder=12,
+            )
+            ax.text(
+                text_x, 0.041, label, transform=ax.transAxes,
+                fontsize=6.5, color=THEME["muted"], va="center", zorder=12,
+            )
+        ax.plot(
+            [0.94, 0.955], [0.041, 0.041], transform=ax.transAxes,
+            color=THEME["road"], linewidth=1.5, zorder=12,
+        )
+        ax.text(
+            0.96, 0.041, "Road", transform=ax.transAxes,
+            fontsize=6.5, color=THEME["muted"], va="center", zorder=12,
+        )
         self.set_title(
-            f"Algorithm: {self.algorithm}. Click an intersection to choose the START point"
+            "Choose a start intersection"
         )
         self.fig.canvas.draw_idle()
 
@@ -728,27 +923,34 @@ class ShortestPathApp:
         generator: its algorithm was captured when the destination was chosen.
         """
         self.algorithm = algorithm
+        for label in self.algorithm_radio.labels:
+            selected = label.get_text() == algorithm
+            label.set_color(THEME["accent"] if selected else THEME["text"])
+            label.set_fontweight("bold" if selected else "normal")
+        selected_label = next(
+            label for label in self.algorithm_radio.labels
+            if label.get_text() == algorithm
+        )
+        self.selection_highlight.set_y(
+            selected_label.get_position()[1] - 0.06
+        )
         # Avoid changing displayed instructions mid-search; the currently
         # executing algorithm remains fixed for that search.
         if self.state == "running":
+            self.header_algorithm.set_text(self.search_algorithm)
             return
+        self.header_algorithm.set_text(algorithm)
         if self.state == "pick_end":
-            self.set_title(
-                f"Algorithm: {algorithm}. Now click the END point (destination)"
-            )
+            self.set_title("Choose a destination")
         elif self.state == "done":
-            self.set_title(
-                f"Algorithm: {algorithm}. Click an intersection to try again."
-            )
+            self.set_title("Click the map to try another route")
         else:
-            self.set_title(
-                f"Algorithm: {algorithm}. Click an intersection to choose the START point"
-            )
+            self.set_title("Choose a start intersection")
         self.fig.canvas.draw_idle()
 
     def set_title(self, text):
-        """Set the map axes title using the application's standard styling."""
-        self.ax.set_title(text, fontsize=13, pad=12)
+        """Update the current interaction status in the application header."""
+        self.header_status.set_text(text)
 
     def offsets(self, nodes):
         """Convert an iterable of node IDs into an N-by-2 coordinate array.
@@ -822,15 +1024,48 @@ class ShortestPathApp:
             self.start = node
             self.start_sc.set_offsets(self.offsets([node]))
             self.state = "pick_end"
-            self.set_title("Now click the END point (destination)")
+            self.ax.annotate(
+                "Start",
+                self.pos[node],
+                xytext=(0, 14),
+                textcoords="offset points",
+                ha="center",
+                fontsize=8,
+                fontweight="bold",
+                color=THEME["text"],
+                bbox={
+                    "boxstyle": "round,pad=0.35",
+                    "facecolor": THEME["start"],
+                    "edgecolor": "none",
+                },
+                zorder=11,
+            )
+            self.set_title("Choose a destination")
             self.fig.canvas.draw_idle()
         elif self.state == "pick_end":
             if node == self.start:
                 return
             self.end = node
             self.end_sc.set_offsets(self.offsets([node]))
+            self.ax.annotate(
+                "End",
+                self.pos[node],
+                xytext=(0, 14),
+                textcoords="offset points",
+                ha="center",
+                fontsize=8,
+                fontweight="bold",
+                color=THEME["text"],
+                bbox={
+                    "boxstyle": "round,pad=0.35",
+                    "facecolor": THEME["end"],
+                    "edgecolor": "none",
+                },
+                zorder=11,
+            )
             self.state = "running"
             self.search_algorithm = self.algorithm
+            self.header_algorithm.set_text(self.search_algorithm)
             self.search_elapsed = 0.0
             # Store factories (lambdas) rather than already-created generators.
             # The selected factory is invoked only after both endpoints are set.
@@ -857,7 +1092,7 @@ class ShortestPathApp:
             # Calling the selected lambda creates a lazy generator. Its
             # search work runs incrementally as tick() calls next().
             self.gen = search_functions[self.search_algorithm]()
-            self.set_title(f"{self.search_algorithm} is running...")
+            self.set_title("Searching")
             self.timer.start()
 
     def on_key(self, event):
@@ -875,7 +1110,7 @@ class ShortestPathApp:
                 self.paused = not self.paused
                 if self.paused:
                     self.timer.stop()
-                    self.set_title("Paused (space to resume)")
+                    self.set_title("Paused")
                     self.fig.canvas.draw_idle()
                 else:
                     self.timer.start()
@@ -925,9 +1160,7 @@ class ShortestPathApp:
         kind = ev[0]
         if kind == "start":
             self.frontier.add(ev[1])
-            self.set_title(
-                f"Start: distance 0. {self.search_algorithm} is exploring..."
-            )
+            self.set_title("Search started")
 
         elif kind == "visit":
             # A visited node leaves the frontier, and any previous active-road
@@ -936,22 +1169,7 @@ class ShortestPathApp:
             self.visited.add(u)
             self.frontier.discard(u)
             self.cur_lc.set_segments([])
-            x, y = self.pos[u]
-            self.ax.text(x, y + 0.22, f"{d:.1f}", fontsize=8, fontweight="bold",
-                         color="#123", ha="center", zorder=10)
-            # Use wording that describes the selection policy for the chosen
-            # algorithm instead of presenting every visit as identical.
-            visit_messages = {
-                "Dijkstra": "Visit closest node",
-                "A*": "Visit node with the best estimated route",
-                "Bidirectional Dijkstra": "Expand lower-distance frontier",
-                "Bidirectional A*": "Expand best estimated frontier",
-                "Greedy Best-First": "Visit closest-to-goal node",
-                "BFS": "Visit next node in breadth-first order",
-            }
-            message = visit_messages[self.search_algorithm]
-            self.set_title(f"{message}: distance = {d:.2f} km "
-                           f"(visited {len(self.visited)})")
+            self.set_title(f"Visited {len(self.visited)}  ·  {d:.2f} km")
             if (u == self.end and self.search_algorithm not in (
                     "Bidirectional Dijkstra", "Bidirectional A*")):
                 # Single-frontier generators stop after visiting the
@@ -975,9 +1193,9 @@ class ShortestPathApp:
                 else:
                     self.prev[v] = u
                 self.frontier.add(v)
-                self.set_title(f"Checking road: better route found, distance to node = {nd:.2f} km")
+                self.set_title(f"Better route found  ·  {nd:.2f} km")
             else:
-                self.set_title(f"Checking road: {nd:.2f} km is not shorter, ignored")
+                self.set_title("Checking alternate road")
 
         if kind == "done":
             # Draw the completed route, clear pending nodes, and retain the
@@ -989,17 +1207,15 @@ class ShortestPathApp:
             self.frontier.clear()
             self.state = "done"
             self.timer.stop()
-            # Distinguish the objectives that are intentionally not shortest
-            # by total road length from the optimal weighted-path algorithms.
-            guarantee = {
-                "BFS": "fewest roads (not shortest road length)",
-                "Greedy Best-First": "route found (not guaranteed shortest)",
-            }.get(self.search_algorithm, "shortest path")
+            # Keep the result label honest about BFS and greedy search, which
+            # do not guarantee the shortest total road length.
+            result_type = {
+                "BFS": "Fewest roads",
+                "Greedy Best-First": "Route found",
+            }.get(self.search_algorithm, "Shortest path")
             self.set_title(
-                f"{self.search_algorithm}: {guarantee}, {total:.2f} km through "
-                f"{len(path)} intersections. Search time: "
-                f"Elapsed search time: {self.search_elapsed:.6f} seconds. "
-                "Click to try again."
+                f"{result_type}  ·  {total:.2f} km  ·  {len(path)} nodes  ·  "
+                f"{self.search_elapsed:.4f} sec"
             )
 
         self.refresh()
