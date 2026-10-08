@@ -96,17 +96,17 @@ Keyboard controls:
 
 ### Map colours and status
 
-| Colour | Meaning |
+| Swatch | Meaning |
 | --- | --- |
-| Pale blue node | Unvisited intersection |
-| Bright blue node | Visited intersection |
-| Teal node | Discovered intersection in the search frontier |
-| Slate-blue road | Road in the town map; its label shows its weight |
-| Blue road | Current best-known predecessor tree |
-| Cyan road | Road currently being checked |
-| Green road | Final route |
-| Green marker and label | Start |
-| Red marker and label | Destination |
+| ⚪ | Unvisited intersection |
+| 🔵 | Visited intersection |
+| 🟢 | Discovered intersection in the search frontier |
+| 🩶 | Road in the town map; its label shows its weight |
+| 🔷 | Current best-known predecessor tree |
+| 🩵 | Road currently being checked |
+| 🟢 | Final route |
+| 🟢 | Start marker and label |
+| 🔴 | Destination marker and label |
 
 Road labels show lengths in kilometres. The header status changes as the
 selection and search progress, then displays the result. The map legend is a
